@@ -1,0 +1,1 @@
+{"dependencies":{"discord.js":"^14.17.3"},"description":"Discord friendly-bet bot for the Mythic's Gathering server. Free-text guesses, mod-settled winners, points and leaderboard only — no money anywhere.","engines":{"node":">=18"},"main":"src/index.js","name":"mythics-gathering-bets-bot","scripts":{"start":"node src/index.js"},"type":"commonjs","version":"1.0.0"}
