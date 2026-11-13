@@ -19,6 +19,7 @@ const MAX_NOTE_LENGTH = 300;
 const commandData = new SlashCommandBuilder()
   .setName('bet')
   .setDescription('Friendly bets — free-text guesses, mod-settled, points only')
+  .setDMPermission(false) // Bets only work in a server, never in DMs.
   .addSubcommand((sub) =>
     sub
       .setName('create')
@@ -108,7 +109,7 @@ async function handleCreate(interaction) {
     });
   }
 
-  db.setMessageId(bet.id, message.id);
+  db.setMessageId(bet.id, guild.id, message.id);
 
   return interaction.reply({
     content: `Bet #${bet.id} is open in <#${channel.id}> — **${question}** Guess with \`/bet guess ${bet.id} <your guess>\`.`,

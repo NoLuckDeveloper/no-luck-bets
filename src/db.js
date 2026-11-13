@@ -8,7 +8,9 @@
 // atomically on each change is more than enough. Writes are synchronous and
 // atomic (temp file + rename) so a crash mid-write never corrupts the store.
 //
-// Scores are server-wide (this bot only runs in one guild): user ID -> wins.
+// Scores are per server: guild ID -> user ID -> wins. Bets already carry
+// guild_id and every lookup filters on it, so a bet, guess, or win in one
+// server can never leak into another.
 
 const path = require('node:path');
 const fs = require('node:fs');
@@ -30,13 +32,40 @@ function load() {
     if (typeof store.nextBetId !== 'number') {
       store.nextBetId = store.bets.reduce((max, b) => Math.max(max, b.id), 0) + 1;
     }
+    // Migration: scores used to be a flat user ID -> wins map (single
+    // server). Rebuild them per server from the settled bets, so wins stay
+    // attributed to the server where they were earned. Any win that cannot
+    // be tied to a settled bet is dropped rather than guessed at.
+    if (isFlatScores(store.scores)) {
+      const rebuilt = {};
+      for (const b of store.bets) {
+        if (b.status === 'settled' && b.winner_id && b.guild_id) {
+          rebuilt[b.guild_id] = rebuilt[b.guild_id] || {};
+          rebuilt[b.guild_id][b.winner_id] = (rebuilt[b.guild_id][b.winner_id] || 0) + 1;
+        }
+      }
+      store.scores = rebuilt;
+      store._scoresMigrated = true;
+    }
     return store;
   } catch {
     return emptyStore();
   }
 }
 
+// Flat (old) shape: { userId: wins }. Per-server shape: { guildId: { userId: wins } }.
+function isFlatScores(scores) {
+  return Object.values(scores).some((v) => typeof v === 'number');
+}
+
 let store = load();
+
+// Persist the migrated scores shape on startup so the file matches the
+// in-memory store even if nothing changes afterwards.
+if (store._scoresMigrated) {
+  delete store._scoresMigrated;
+  save();
+}
 
 function save() {
   const tmpPath = `${dbPath}.tmp`;
@@ -69,8 +98,8 @@ function createBet({ guildId, channelId, question, createdBy }) {
   return copyBet(bet);
 }
 
-function setMessageId(betId, messageId) {
-  const b = store.bets.find((row) => row.id === betId);
+function setMessageId(betId, guildId, messageId) {
+  const b = store.bets.find((row) => row.id === betId && row.guild_id === guildId);
   if (b) {
     b.message_id = messageId;
     save();
@@ -121,7 +150,8 @@ function settleBet(betId, guildId, winnerId, note, settledBy) {
   b.settle_note = note ?? null;
   b.settled_by = settledBy;
   b.settled_at = Date.now();
-  store.scores[winnerId] = (store.scores[winnerId] || 0) + 1;
+  const guildScores = (store.scores[guildId] = store.scores[guildId] || {});
+  guildScores[winnerId] = (guildScores[winnerId] || 0) + 1;
   save();
   return copyBet(b);
 }
@@ -135,7 +165,8 @@ function cancelBet(betId, guildId) {
 }
 
 function getLeaderboard(guildId) {
-  const entries = Object.entries(store.scores)
+  const guildScores = store.scores[guildId] || {};
+  const entries = Object.entries(guildScores)
     .map(([user_id, wins]) => ({ user_id, wins }))
     .sort((a, b) => b.wins - a.wins || a.user_id.localeCompare(b.user_id));
   const settledCount = store.bets.filter((b) => b.guild_id === guildId && b.status === 'settled').length;
