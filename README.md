@@ -1,9 +1,13 @@
-# Mythic's Gathering Bets Bot
+# No Luck Bets
 
-A Discord bot for the Mythic's Gathering server. It tracks **friendly bets —
-no cash, no virtual currency, no payouts**. Someone posts a bet, members make
-free-text guesses, and a mod settles it by naming the winner. Winners get 1
-point each, and `/bet leaderboard` keeps the running score.
+A Discord bot for friendly bets — no cash, no virtual currency, no
+payouts. Someone posts a bet, members make free-text guesses, and a mod
+settles it by naming the winner. Winners get 1 point each, and
+`/bet leaderboard` keeps the running score.
+
+It works in **every server it is added to** — bets, guesses, and
+leaderboards are kept separate per server, so a bet in one server never
+shows up in another.
 
 The first bet it was built for: "How long before Jake buys another game?"
 Members guess timeframes ("3 days", "by Friday", "tomorrow"), and when Jake
@@ -26,6 +30,8 @@ buys a game a mod settles it — whoever was closest wins the point.
 - **No DMs, ever.** Winners are announced in the channel only.
 - **Survives restarts.** Bets, guesses, and scores live in a small JSON
   file on Render's persistent disk.
+- **One bot, many servers.** Invite it to any server and it just works
+  there — each server gets its own bets and its own leaderboard.
 
 ## Commands
 
@@ -65,22 +71,19 @@ straight from Discord into Render.
    Intent" and "Message Content Intent" off — the bot never reads messages
    and never needs the member list.
 
-### 3. Invite the bot to the server
+### 3. Invite the bot to a server
 
 1. In the left menu, click **OAuth2**, then **URL Generator**.
 2. Under **Scopes**, check **bot** and **applications.commands**.
 3. Under **Bot Permissions**, check **Send Messages**, **Embed Links**, and
    **Read Message History**.
-4. Copy the generated URL at the bottom, open it in your browser, pick the
-   **Mythic's Gathering** server, and authorize.
+4. Copy the generated URL at the bottom, open it in your browser, pick a
+   server, and authorize. Use the same link for every server you want the
+   bot in — you need Manage Server permission on each one. The commands
+   are registered globally, so they can take up to about an hour to show
+   up in a newly added server; that's Discord, not the bot.
 
-### 4. Get the server ID
-
-1. In Discord, go to **User Settings → Advanced** and turn on **Developer Mode**.
-2. Right-click the **Mythic's Gathering** server icon and choose **Copy Server ID**.
-   That is your `GUILD_ID`.
-
-### 5. Deploy on Render
+### 4. Deploy on Render
 
 1. Put these files at the root of a GitHub repo.
 2. In Render, go to **New → Blueprint** and pick that repo. The included
@@ -91,18 +94,20 @@ straight from Discord into Render.
 3. When Render asks for environment variables, fill in:
    - `DISCORD_TOKEN` — the bot token from step 2.
    - `CLIENT_ID` — the application ID from step 1.
-   - `GUILD_ID` — the server ID from step 4.
 
    (`BETS_DB_PATH` and `NODE_VERSION` are already set in `render.yaml`.)
+   There is no `GUILD_ID` anymore — the bot works in every server it is
+   invited to. If `GUILD_ID` is set in Render from the old single-server
+   setup, it is ignored.
 4. Deploy. In the logs you should see `Logged in as …` and
-   `Registered /bet commands for guild …`. If a variable is missing, the
+   `Registered /bet commands globally.`. If a variable is missing, the
    bot stops with a plain message naming it instead of crashing.
 
-### 6. Test it (takes about a minute)
+### 5. Test it (takes about a minute)
 
 1. In the server, run `/bet create question:How long before Jake buys another game?`
-   (If the command doesn't show up yet, wait a minute — guild commands
-   usually appear fast, but Discord can take a moment.)
+   (If the command doesn't show up yet, wait — global commands can take up
+   to about an hour to appear in a server for the first time.)
 2. The bet post appears with the question and instructions.
 3. Guess with `/bet guess id:1 guess:3 days`, then guess again with a
    different timeframe to check it updates.
@@ -117,14 +122,15 @@ Requires Node 20 or newer:
 
 ```sh
 npm install
-DISCORD_TOKEN=… CLIENT_ID=… GUILD_ID=… node src/index.js
+DISCORD_TOKEN=… CLIENT_ID=… node src/index.js
 ```
 
 ## Notes
 
-- The bot only answers in the server named by `GUILD_ID`.
+- The bot answers in every server it is in. Bets, guesses, and scores are
+  per server — a win in one server never shows on another server's
+  leaderboard.
 - Guesses are free text — the bot stores exactly what each member typed.
   Settling is a mod's judgement call on which guess was closest.
 - If a bet post gets deleted before it settles, the bet still exists in the
   database — settle or cancel it by ID and the announcement still posts.
-- Scores are per member, all-time, for this server only.
